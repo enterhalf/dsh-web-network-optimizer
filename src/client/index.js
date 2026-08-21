@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-web-optimizer — 浏览器端 bundle(单文件,经 __ModuleLoader__ 加载)。
+ * dsh-web-optimizer — 浏览器端 bundle(单文件,经 __ModuleLoader__ 加载)。
  *
  * 设置页新增「Web 优化器」分节(settings.section):
  *   - 本次加载:基于 performance.getEntriesByType('resource'),按组件分组展示
@@ -11,7 +11,7 @@
  * 样式全部使用 --dsw-* 主题变量,跟随全局亮/暗主题。
  */
 window.__ModuleLoader__.load({
-	id: '@dsh-external/dsh-web-optimizer',
+	id: 'dsh-web-optimizer',
 	factory: (require) => {
 		const module = { exports: {} }
 		const exports = module.exports

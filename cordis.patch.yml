@@ -3,4 +3,4 @@
 # `dsh plugin --profile web add <path>` installed this package.
 - insert:
     - id: web-optimizer
-      name: '@dsh-external/dsh-web-optimizer'
+      name: 'dsh-web-optimizer'

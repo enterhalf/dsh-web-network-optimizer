@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-web-optimizer — Web 优化器(host half).
+ * dsh-web-optimizer — Web 优化器(host half).
  *
  * 三件事,全部通过包装 webServer 路由表 handler 实现(与 @xgone/dsh-remote 的
  * 网关同一机制,嵌套顺序无关):

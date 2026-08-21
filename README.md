@@ -1,19 +1,23 @@
-# @dsh-external/dsh-web-optimizer（Web 优化器）
+# dsh-web-optimizer（Web 优化器）
 
-DSH Web GUI 的**根本级加载优化**：不做懒加载、不改业务代码，只把两件事做对——
+**极大提升 DSH Web GUI 的加载速度。**
 
-1. **传输压缩**：所有可压缩响应下发 brotli（兜底 gzip），本地回环与远程访问一致；
-2. **浏览器缓存**：内容哈希资源（`/assets/*`、`/plugins/*`、`rev=` URL、favicon）下发 `Cache-Control: public, max-age=31536000, immutable`。
+不做懒加载、不改业务代码，只把两件事做对，首屏加载流量与等待时间随之坍缩：
 
-外加一个**分插件流量账本**：设置页新增「Web 优化器」面板，实时看到每个插件本次加载与累计占用了多少流量、压缩省了多少、缓存命中情况。
+1. **传输压缩**——所有可压缩响应下发 brotli（兜底 gzip），本地回环与远程访问一致；
+2. **浏览器缓存**——内容哈希资源（`/assets/*`、`/plugins/*`、`rev=` URL、favicon）下发 `Cache-Control: public, max-age=31536000, immutable`。
 
-## 实测效果（完整加载 DSH GUI，87 个静态请求）
+外加一个**分插件流量账本**：设置 → **Web 优化器** 面板，实时看到每个插件本次加载与累计占用多少流量、压缩省了多少、缓存命中情况。
 
-| | 优化前 | 优化后 |
-|---|---|---|
-| 静态资源线上流量 | 8.1 MB（无压缩、无缓存） | **1.54 MB**（brotli） |
-| 二次进入（缓存命中后） | 8.1 MB | **≈ 0**（只剩 API 数据） |
-| 最大 API `/api/session.list` | 2.18 MB | **144 KB**（-93%） |
+## 实测效果（完整加载 GUI，87 个静态请求）
+
+| | 优化前 | 优化后 | 变化 |
+|---|---|---|---|
+| 静态资源线上流量 | 8.1 MB（无压缩、无缓存） | **1.54 MB** | **-81%** |
+| 二次进入（缓存命中后） | 8.1 MB | **≈ 0**（只剩 API 数据） | 静态零传输 |
+| 最大 API `/api/session.list` | 2.18 MB | **144 KB** | -93% |
+
+> 注：优化前若还装有大体积插件（如 22.4MB 的 office 插件），首屏可达 30.5 MB——那部分是插件本身的问题；本插件解决的是"传输与缓存"这一层，两者叠加后提速最明显。
 
 压缩与 dsh-remote 自带的 gzip 互不冲突：谁先压缩，另一个检测到 `content-encoding` 后自动跳过，装配顺序无关、不会双重压缩。
 
@@ -29,7 +33,7 @@ DSH Web GUI 的**根本级加载优化**：不做懒加载、不改业务代码�
 从 GitHub Release 安装（tgz 附件）：
 
 ```bash
-dsh plugin --profile web add https://github.com/TomIsFat/dsh-web-optimizer/releases/download/v0.1.0/@dsh-external-dsh-web-optimizer-0.1.0.tgz
+dsh plugin --profile web add https://github.com/TomIsFat/dsh-web-optimizer/releases/download/v0.1.0/dsh-web-optimizer-0.1.0.tgz
 ```
 
 或本地构建后安装：
@@ -42,7 +46,7 @@ dsh plugin --profile web add /path/to/dsh-web-optimizer
 卸载：
 
 ```bash
-dsh plugin --profile web remove @dsh-external/dsh-web-optimizer
+dsh plugin --profile web remove dsh-web-optimizer
 ```
 
 卸载时路由包装完整还原（`webServer.register`、exact/prefixes/fallback 表、升级器），账本文件保留在 `~/.dsh/storages/dsh-web-optimizer/` 供回看。

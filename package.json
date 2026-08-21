@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-external/dsh-web-optimizer",
+  "name": "dsh-web-optimizer",
   "version": "0.1.0",
   "description": "DSH Web 优化器:响应 brotli/gzip 压缩 + 内容哈希资源 immutable 长效缓存 + 分插件流量账本与设置页面板",
   "type": "module",
