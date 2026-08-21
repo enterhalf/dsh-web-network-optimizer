@@ -76,7 +76,7 @@ window.__ModuleLoader__.load({
 			// 圆点定位在会话标题左侧:挂在 conversation.session.header.actions 槽位内,
 			// 用绝对定位脱离 flex 流,贴到头部左缘;标题簇让出左侧空间。
 			// 属性包含选择器[class*=...]对 CSS-module 哈希前缀免疫(核心升级换哈希也不破)。
-			'.wog-chip{position:absolute;left:20px;top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:12px;height:12px;max-width:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
+			'.wog-chip{position:absolute;left:20px;top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:auto;max-width:12px;height:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
 			'.wog-chip:hover{max-width:320px;height:22px;top:18px;padding:0 12px 0 0;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
 			'.wog-dot{width:10px;height:10px;border-radius:50%;flex:none}',
 			'.wog-text{display:none}',
@@ -85,7 +85,7 @@ window.__ModuleLoader__.load({
 			'.wog-chip.wog-neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
 			'.wog-chip.wog-err{color:var(--dsw-alias-state-error-primary)}',
 			'.wog-chip.wog-err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
-			'[class*="titleCluster"]{padding-left:14px}',
+			'[class*="titleCluster"]{padding-left:8px}',
 			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
