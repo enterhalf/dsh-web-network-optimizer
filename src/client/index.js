@@ -8,12 +8,14 @@
  *     线上流量、原始大小、压缩节省、占比),5 秒轮询;
  *   - 操作:刷新 / 重置账本(两步确认)。
  *
- * 连接守护(shell.overlay 徽章):移动端切后台 TCP 被运营商静默切断时,
+ * 连接守护(会话标题左侧圆点):移动端切后台 TCP 被运营商静默切断时,
  * WebSocket 永远 OPEN、连接控制器永不重连 → 界面永久卡死。三层主动探针
  * (navigator.onLine / host.describe / WS 握手)判定僵尸连接后,调
  * POST /web-network-optimizer/kick 让服务端销毁全部 upgrade socket,
  * 控制器走既有重连 + 运行时自动重同步,页面不刷新、内存状态全保留。
- * 徽章常显:实时状态(正常/重连/离线/网络异常/恢复中),点击 = 手动强制重连。
+ * 圆点常显于会话标题左侧(conversation.session.header.actions 槽位内,
+ * CSS 绝对定位):颜色即状态(绿=正常/灰=过渡/红=异常,红点脉冲),
+ * 悬停展开文字,点击 = 手动强制重连。
  *
  * 样式全部使用 --dsw-* 主题变量,跟随全局亮/暗主题。
  */
@@ -71,15 +73,19 @@ window.__ModuleLoader__.load({
 			'.wo-msg{font-size:12px;color:var(--dsw-alias-label-tertiary)}',
 			'.wo-msg.err{color:var(--dsw-alias-state-error-primary)}',
 			'.wo-empty{font-size:12px;color:var(--dsw-alias-label-tertiary);padding:14px 10px}',
-			'.wog-chip{position:absolute;top:10px;right:14px;z-index:30;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:20px;height:20px;max-width:20px;padding:0;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.12);white-space:nowrap;overflow:hidden;transition:max-width .18s ease,padding .18s ease,border-color .18s ease}',
-			'.wog-chip:hover{max-width:320px;padding:0 12px 0 9px;border-color:var(--dsw-alias-border-l3)}',
+			// 圆点定位在会话标题左侧:挂在 conversation.session.header.actions 槽位内,
+			// 用绝对定位脱离 flex 流,贴到头部左缘;标题簇让出左侧空间。
+			// 属性包含选择器[class*=...]对 CSS-module 哈希前缀免疫(核心升级换哈希也不破)。
+			'.wog-chip{position:absolute;left:20px;top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:12px;height:12px;max-width:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
+			'.wog-chip:hover{max-width:320px;height:22px;top:18px;padding:0 12px 0 0;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
 			'.wog-dot{width:10px;height:10px;border-radius:50%;flex:none}',
 			'.wog-text{display:none}',
-			'.wog-chip:hover .wog-text{display:inline;margin-left:7px}',
+			'.wog-chip:hover .wog-text{display:inline;margin-left:8px}',
 			'.wog-chip.wog-ok .wog-dot{background:var(--dsw-alias-state-success-primary)}',
 			'.wog-chip.wog-neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
 			'.wog-chip.wog-err{color:var(--dsw-alias-state-error-primary)}',
 			'.wog-chip.wog-err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
+			'[class*="titleCluster"]{padding-left:14px}',
 			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
@@ -400,7 +406,7 @@ window.__ModuleLoader__.load({
 		// 页面不刷新,草稿/滚动等内存状态全保留。
 		// 状态:ok(绿点) / probing / reconnecting / offline / neterr /
 		//       streamerr / zombie(恢复中) / recovered(5s 后回 ok)。
-		// 徽章常显(shell.overlay),点击 = 手动强制重连(绕过冷却)。
+		// 圆点常显于会话标题左侧,悬停展开文字,点击 = 手动强制重连(绕过冷却)。
 
 		const GUARD_LABELS = {
 			ok: { text: '连接正常', tone: 'ok' },
@@ -669,11 +675,12 @@ window.__ModuleLoader__.load({
 				})
 				if (connection !== undefined) {
 					gAttach(connection)
-					slots.inject('shell.overlay', () => {
+					// 圆点挂在会话头部 actions 槽位内,由 CSS 绝对定位到会话标题左侧
+					slots.inject('conversation.session.header.actions', () => {
 						const dispose = slots.register({
-							name: 'shell.overlay',
+							name: 'conversation.session.header.actions',
 							id: 'web-optimizer-guard',
-							order: 100,
+							order: -10,
 							label: '连接守护',
 							inject: () => ({}),
 						}, GuardBadge)
