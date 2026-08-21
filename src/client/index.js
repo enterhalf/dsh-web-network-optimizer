@@ -71,12 +71,15 @@ window.__ModuleLoader__.load({
 			'.wo-msg{font-size:12px;color:var(--dsw-alias-label-tertiary)}',
 			'.wo-msg.err{color:var(--dsw-alias-state-error-primary)}',
 			'.wo-empty{font-size:12px;color:var(--dsw-alias-label-tertiary);padding:14px 10px}',
-			'.wog-chip{position:absolute;top:10px;right:14px;z-index:30;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;line-height:18px;padding:3px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.12);white-space:nowrap}',
-			'.wog-chip:hover{border-color:var(--dsw-alias-border-l3)}',
-			'.wog-dot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-success-primary);flex:none}',
-			'.wog-chip.neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
-			'.wog-chip.err{color:var(--dsw-alias-state-error-primary)}',
-			'.wog-chip.err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
+			'.wog-chip{position:absolute;top:10px;right:14px;z-index:30;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:20px;height:20px;max-width:20px;padding:0;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.12);white-space:nowrap;overflow:hidden;transition:max-width .18s ease,padding .18s ease,border-color .18s ease}',
+			'.wog-chip:hover{max-width:320px;padding:0 12px 0 9px;border-color:var(--dsw-alias-border-l3)}',
+			'.wog-dot{width:10px;height:10px;border-radius:50%;flex:none}',
+			'.wog-text{display:none}',
+			'.wog-chip:hover .wog-text{display:inline;margin-left:7px}',
+			'.wog-chip.wog-ok .wog-dot{background:var(--dsw-alias-state-success-primary)}',
+			'.wog-chip.wog-neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
+			'.wog-chip.wog-err{color:var(--dsw-alias-state-error-primary)}',
+			'.wog-chip.wog-err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
 			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
@@ -637,12 +640,12 @@ window.__ModuleLoader__.load({
 			}, [])
 			const info = GUARD_LABELS[state] || GUARD_LABELS.ok
 			return el('button', {
-				className: 'wog-chip' + (info.tone !== 'ok' ? ' ' + info.tone : ''),
-				title: '连接守护:实时显示连接状态;点击 = 强制重连',
+				className: 'wog-chip wog-' + info.tone,
+				title: '连接守护:' + info.text + ' — 点击 = 强制重连',
 				onClick: () => { if (guard.handle) gKick(true) },
 			},
 				el('span', { className: 'wog-dot' }),
-				info.text,
+				el('span', { className: 'wog-text' }, info.text),
 			)
 		}
 
