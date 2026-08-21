@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-network-optimizer",
-  "version": "0.1.0",
-  "description": "DSH Web 优化器:响应 brotli/gzip 压缩 + 内容哈希资源 immutable 长效缓存 + 分插件流量账本与设置页面板",
+  "version": "0.2.0",
+  "description": "网页端加速并节约流量:响应压缩 + 内容哈希 immutable 缓存 + 分插件流量账本 + 移动端僵尸连接自动守护",
   "type": "module",
   "main": "./lib/index.js",
   "files": [
@@ -31,6 +31,7 @@
     "client": {
       "platform": "web",
       "inject": [
+        "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots"
       ]

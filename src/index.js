@@ -497,7 +497,29 @@ function readJsonBody(req, limitBytes) {
 	})
 }
 
-async function handleNetMeter(req, res, ledger) {
+/**
+ * 外科手术式重连:销毁 webServer 当前持有的全部 upgrade socket
+ * (即 /api/events.mux、/api/events.host 等 WebSocket 下连)。
+ * 浏览器立刻收到 onclose(1006) → ConnectionController 自动重连 →
+ * runtime 在 onConnected 时 resync。用于移动端后台冻结后的
+ * "僵尸连接"(OS 静默切断 TCP、close 事件永不补发)的确定性恢复,
+ * 无需整页刷新;对健康连接仅造成一次 ~1s 的重连 + 数据重拉。
+ * 副作用:同时断开该服务器其它 upgrade 连接(HMR/remote 类 WS),
+ * 它们自带自动重连,~1s 内自愈。
+ */
+function kickSockets(webServer) {
+	const sockets = [...(webServer.upgradedSockets ?? [])]
+	for (const socket of sockets) {
+		try {
+			socket.destroy()
+		} catch {
+			/* 单个 socket 已死不影响其余 */
+		}
+	}
+	return sockets.length
+}
+
+async function handleNetMeter(req, res, ledger, webServer) {
 	const pathname = pathnameOf(req)
 	if (pathname === '/web-network-optimizer/ledger' && req.method === 'GET') {
 		jsonOut(res, 200, ledger.snapshot())
@@ -507,6 +529,12 @@ async function handleNetMeter(req, res, ledger) {
 		await readJsonBody(req, 4096)
 		ledger.reset()
 		jsonOut(res, 200, { ok: true })
+		return
+	}
+	if (pathname === '/web-network-optimizer/kick' && req.method === 'POST') {
+		await readJsonBody(req, 4096)
+		const closed = kickSockets(webServer)
+		jsonOut(res, 200, { ok: true, closed, at: new Date().toISOString() })
 		return
 	}
 	jsonOut(res, 404, { ok: false, error: 'not found' })
@@ -539,7 +567,7 @@ function apply(ctx, config) {
 	const disposeRoute = webServer.register({
 		kind: 'prefix',
 		path: '/web-network-optimizer',
-		handler: (req, res) => handleNetMeter(req, res, ledger),
+		handler: (req, res) => handleNetMeter(req, res, ledger, webServer),
 	})
 
 	ctx.effect(() => () => {
