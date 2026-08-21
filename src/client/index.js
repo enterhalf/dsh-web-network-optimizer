@@ -1,12 +1,19 @@
 /**
  * dsh-web-network-optimizer — 浏览器端 bundle(单文件,经 __ModuleLoader__ 加载)。
  *
- * 设置页新增「Web 优化器」分节(settings.section):
+ * 设置页新增「Web 网络优化器」分节(settings.section):
  *   - 本次加载:基于 performance.getEntriesByType('resource'),按组件分组展示
  *     实际传输字节(transferSize)、解压后大小与缓存命中数;
  *   - 累计账本:GET /web-network-optimizer/ledger 拉取服务端分插件流量统计(请求数、
  *     线上流量、原始大小、压缩节省、占比),5 秒轮询;
  *   - 操作:刷新 / 重置账本(两步确认)。
+ *
+ * 连接守护(shell.overlay 徽章):移动端切后台 TCP 被运营商静默切断时,
+ * WebSocket 永远 OPEN、连接控制器永不重连 → 界面永久卡死。三层主动探针
+ * (navigator.onLine / host.describe / WS 握手)判定僵尸连接后,调
+ * POST /web-network-optimizer/kick 让服务端销毁全部 upgrade socket,
+ * 控制器走既有重连 + 运行时自动重同步,页面不刷新、内存状态全保留。
+ * 徽章常显:实时状态(正常/重连/离线/网络异常/恢复中),点击 = 手动强制重连。
  *
  * 样式全部使用 --dsw-* 主题变量,跟随全局亮/暗主题。
  */
@@ -24,7 +31,17 @@ window.__ModuleLoader__.load({
 
 		const API_LEDGER = '/web-network-optimizer/ledger'
 		const API_RESET = '/web-network-optimizer/reset'
+		const API_KICK = '/web-network-optimizer/kick'
 		const POLL_MS = 5000
+
+		// 连接守护计时参数
+		const PROBE_TIMEOUT_MS = 4500 // 单层探针超时(描述 RPC / WS 握手)
+		const HEARTBEAT_MS = 30000 // 可见时每 30s 主动心跳探针
+		const REPROBE_MS = 5000 // 不健康时的自愈重试间隔
+		const KICK_COOLDOWN_MS = 4000 // 自动 kick 冷却
+		const HIDDEN_GATE_MS = 8000 // 页面后台 ≥8s 才允许自动 kick(僵尸判定门)
+		const RECOVERED_HIDE_MS = 5000 // "已恢复" 提示停留时长
+		const STARTUP_PROBE_MS = 1500 // 加载后的首次探针
 
 		const CSS = [
 			'.wo-root{display:flex;flex-direction:column;gap:18px;padding:4px 2px 24px;font-size:13px;color:var(--dsw-alias-label-primary)}',
@@ -54,6 +71,13 @@ window.__ModuleLoader__.load({
 			'.wo-msg{font-size:12px;color:var(--dsw-alias-label-tertiary)}',
 			'.wo-msg.err{color:var(--dsw-alias-state-error-primary)}',
 			'.wo-empty{font-size:12px;color:var(--dsw-alias-label-tertiary);padding:14px 10px}',
+			'.wog-chip{position:absolute;top:10px;right:14px;z-index:30;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;line-height:18px;padding:3px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.12);white-space:nowrap}',
+			'.wog-chip:hover{border-color:var(--dsw-alias-border-l3)}',
+			'.wog-dot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-success-primary);flex:none}',
+			'.wog-chip.neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
+			'.wog-chip.err{color:var(--dsw-alias-state-error-primary)}',
+			'.wog-chip.err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
+			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
 		let styleInjected = false
@@ -357,24 +381,307 @@ window.__ModuleLoader__.load({
 			)
 		}
 
+		// ── 连接守护 ──────────────────────────────────────────────────────────
+		//
+		// 问题:移动端切后台后运营商悄悄切断 TCP,浏览器冻结收不到 close 事件,
+		// WebSocket 永远停留在 OPEN,连接控制器不会重连 → 界面永久卡死,
+		// 用户分不清"没动"还是"网络断了"。
+		//
+		// 方案:三层主动探针 + 外科手术式 kick。
+		//   1) navigator.onLine 为 false → 离线(只信 false);
+		//   2) host.describe unary(fetch,4.5s 超时)→ 通网与否;
+		//   3) 自建 /api/events.mux WebSocket 握手(4.5s)→ 长连接通道可用性。
+		// 2+3 都通、而控制器自认已连接、且页面曾在后台 ≥8s(或 online 事件)
+		// → 判定旧连接是僵尸 → kick 端点销毁服务端全部 upgrade socket,
+		// 控制器的 for-await 收到 1006 后走既有重连 + 运行时自动重同步,
+		// 页面不刷新,草稿/滚动等内存状态全保留。
+		// 状态:ok(绿点) / probing / reconnecting / offline / neterr /
+		//       streamerr / zombie(恢复中) / recovered(5s 后回 ok)。
+		// 徽章常显(shell.overlay),点击 = 手动强制重连(绕过冷却)。
+
+		const GUARD_LABELS = {
+			ok: { text: '连接正常', tone: 'ok' },
+			probing: { text: '检查中…', tone: 'neutral' },
+			reconnecting: { text: '重连中…', tone: 'neutral' },
+			offline: { text: '离线 · 等待网络', tone: 'err' },
+			neterr: { text: '网络异常 · 自动检测中', tone: 'err' },
+			streamerr: { text: '连接通道异常 · 检测中', tone: 'err' },
+			zombie: { text: '僵尸连接 · 正在恢复…', tone: 'err' },
+			recovered: { text: '已恢复 ✓', tone: 'ok' },
+		}
+
+		const guard = {
+			state: 'ok',
+			handle: null,
+			attached: false,
+			probing: false,
+			probeToken: 0,
+			hasEverConnected: false,
+			hiddenSince: null,
+			lastKickAt: 0,
+			kickInFlight: false,
+			reprobeTimer: 0,
+			recoveredTimer: 0,
+			heartbeatTimer: 0,
+			startupTimer: 0,
+			listeners: new Set(),
+			cleanup: [],
+		}
+
+		function gNotify() {
+			for (const fn of [...guard.listeners]) { try { fn(guard.state) } catch { /* 忽略订阅者异常 */ } }
+		}
+
+		function gSetState(next) {
+			if (guard.state === next) return
+			guard.state = next
+			gNotify()
+		}
+
+		function gUnhealthy() {
+			return guard.state === 'offline' || guard.state === 'neterr' ||
+				guard.state === 'streamerr' || guard.state === 'reconnecting'
+		}
+
+		function gClearReprobe() {
+			if (guard.reprobeTimer) { clearTimeout(guard.reprobeTimer); guard.reprobeTimer = 0 }
+		}
+
+		function gScheduleReprobe() {
+			if (guard.reprobeTimer) return
+			if (!gUnhealthy()) return
+			guard.reprobeTimer = setTimeout(() => { guard.reprobeTimer = 0; gProbe('reprobe', { canKick: false }) }, REPROBE_MS)
+		}
+
+		function gMarkRecovered() {
+			gClearReprobe()
+			gSetState('recovered')
+			if (guard.recoveredTimer) clearTimeout(guard.recoveredTimer)
+			guard.recoveredTimer = setTimeout(() => {
+				guard.recoveredTimer = 0
+				if (guard.state === 'recovered') gSetState('ok')
+			}, RECOVERED_HIDE_MS)
+		}
+
+		/** 探针层 2:unary host.describe(带超时与中止)。 */
+		async function gDescribeProbe(api, timeoutMs) {
+			const ac = new AbortController()
+			const t = setTimeout(() => ac.abort(), timeoutMs)
+			try {
+				const res = await api.host.describe({}, ac.signal)
+				return !!(res && res.result && res.result.ok === true)
+			} catch { return false }
+			finally { clearTimeout(t) }
+		}
+
+		/** 探针层 3:自建 WebSocket 握手(成功即立即关闭)。 */
+		function gWsHandshakeProbe(timeoutMs) {
+			return new Promise((resolve) => {
+				let ws
+				let settled = false
+				const finish = (ok) => {
+					if (settled) return
+					settled = true
+					clearTimeout(t)
+					try { if (ws) ws.close() } catch { /* 已关闭 */ }
+					resolve(ok)
+				}
+				try {
+					const url = new URL('/api/events.mux', location.origin)
+					url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+					ws = new WebSocket(url.toString())
+				} catch { return resolve(false) }
+				const t = setTimeout(() => finish(false), timeoutMs)
+				ws.addEventListener('open', () => finish(true), { once: true })
+				ws.addEventListener('error', () => finish(false), { once: true })
+				ws.addEventListener('close', () => finish(false), { once: true })
+			})
+		}
+
+		/** 外科手术式 kick:让服务端销毁全部 upgrade socket。 */
+		async function gKick(manual) {
+			if (guard.kickInFlight) return
+			const now = Date.now()
+			if (!manual && now - guard.lastKickAt < KICK_COOLDOWN_MS) return
+			guard.lastKickAt = now
+			guard.kickInFlight = true
+			gSetState('zombie')
+			try {
+				const res = await fetch(API_KICK, {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: { 'content-type': 'application/json' },
+					body: '{}',
+				})
+				if (!res.ok) throw new Error('HTTP ' + res.status)
+			} catch {
+				/* kick 通道本身不可用 → 下面按网络问题继续检测 */
+			} finally {
+				guard.kickInFlight = false
+			}
+			// kick 后控制器的旧流将收到 1006 并走既有重连;此处先显示"重连中",
+			// 由探针链与 hostDescription 订阅跟踪到恢复
+			gClearReprobe()
+			gSetState('reconnecting')
+			gScheduleReprobe()
+		}
+
+		/** 三层探针主流程。opts.canKick:本次探针是否允许判定僵尸并 kick。 */
+		async function gProbe(reason, opts) {
+			if (!guard.handle || guard.probing) return
+			const canKick = !!(opts && opts.canKick)
+			guard.probing = true
+			const token = ++guard.probeToken
+			// 健康状态下静默探针,徽章保持"连接正常"不闪烁
+			if (guard.state !== 'ok' && guard.state !== 'recovered') gSetState('probing')
+			try {
+				// 层 1:只信 navigator.onLine === false
+				if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+					gSetState('offline')
+					gScheduleReprobe()
+					return
+				}
+				// 层 2:unary 通网
+				const descOk = await gDescribeProbe(guard.handle.api, PROBE_TIMEOUT_MS)
+				if (token !== guard.probeToken) return
+				if (!descOk) { gSetState('neterr'); gScheduleReprobe(); return }
+				// 层 3:长连接通道
+				const wsOk = await gWsHandshakeProbe(PROBE_TIMEOUT_MS)
+				if (token !== guard.probeToken) return
+				if (!wsOk) { gSetState('streamerr'); gScheduleReprobe(); return }
+				// 网络全通:看控制器的自我认知
+				const snap = guard.handle.hostDescription.getSnapshot()
+				if (snap === undefined) {
+					if (guard.hasEverConnected) { gSetState('reconnecting'); gScheduleReprobe() }
+					else { gSetState('ok'); gScheduleReprobe() } // 启动期首次连接尚未落地
+					return
+				}
+				// 探针全通 + 控制器自认已连接 + 有僵尸嫌疑 → kick
+				if (canKick) { gKick(false); return }
+				gClearReprobe()
+				if (guard.state === 'recovered') return // 保留"已恢复"提示,5s 后自动回 ok
+				gSetState('ok')
+			} finally {
+				guard.probing = false
+			}
+		}
+
+		function gOnDescChange() {
+			const snap = guard.handle.hostDescription.getSnapshot()
+			if (snap !== undefined) {
+				guard.hasEverConnected = true
+				if (gUnhealthy() || guard.state === 'zombie') gMarkRecovered()
+			} else if (guard.hasEverConnected && (guard.state === 'ok' || guard.state === 'recovered' || guard.state === 'zombie')) {
+				gSetState('reconnecting')
+				gScheduleReprobe()
+			}
+		}
+
+		function gAttach(connection) {
+			if (guard.attached) return
+			guard.attached = true
+			guard.handle = connection
+			guard.cleanup.push(connection.hostDescription.subscribe(gOnDescChange))
+
+			const onVis = () => {
+				if (document.visibilityState === 'hidden') {
+					if (guard.hiddenSince === null) guard.hiddenSince = Date.now()
+				} else if (guard.hiddenSince !== null) {
+					const dur = Date.now() - guard.hiddenSince
+					guard.hiddenSince = null
+					if (dur >= HIDDEN_GATE_MS) gProbe('visibility', { canKick: true })
+				}
+			}
+			const onOnline = () => gProbe('online', { canKick: true })
+			const onOffline = () => { gSetState('offline'); gScheduleReprobe() }
+
+			document.addEventListener('visibilitychange', onVis)
+			window.addEventListener('online', onOnline)
+			window.addEventListener('offline', onOffline)
+			guard.cleanup.push(() => {
+				document.removeEventListener('visibilitychange', onVis)
+				window.removeEventListener('online', onOnline)
+				window.removeEventListener('offline', onOffline)
+			})
+
+			guard.heartbeatTimer = setInterval(() => {
+				if (document.visibilityState === 'visible') gProbe('heartbeat', { canKick: false })
+			}, HEARTBEAT_MS)
+			guard.cleanup.push(() => clearInterval(guard.heartbeatTimer))
+
+			guard.startupTimer = setTimeout(() => gProbe('startup', { canKick: false }), STARTUP_PROBE_MS)
+			guard.cleanup.push(() => clearTimeout(guard.startupTimer))
+		}
+
+		function gDetach() {
+			if (!guard.attached) return
+			guard.attached = false
+			for (const fn of guard.cleanup.splice(0)) { try { fn() } catch { /* 忽略 */ } }
+			gClearReprobe()
+			if (guard.recoveredTimer) { clearTimeout(guard.recoveredTimer); guard.recoveredTimer = 0 }
+			if (guard.heartbeatTimer) { clearInterval(guard.heartbeatTimer); guard.heartbeatTimer = 0 }
+			if (guard.startupTimer) { clearTimeout(guard.startupTimer); guard.startupTimer = 0 }
+			guard.handle = null
+			guard.hiddenSince = null
+			guard.listeners.clear()
+			guard.state = 'ok'
+		}
+
+		function GuardBadge() {
+			ensureStyle()
+			const [state, setState] = React.useState(guard.state)
+			React.useEffect(() => {
+				const fn = (s) => setState(s)
+				guard.listeners.add(fn)
+				return () => { guard.listeners.delete(fn) }
+			}, [])
+			const info = GUARD_LABELS[state] || GUARD_LABELS.ok
+			return el('button', {
+				className: 'wog-chip' + (info.tone !== 'ok' ? ' ' + info.tone : ''),
+				title: '连接守护:实时显示连接状态;点击 = 强制重连',
+				onClick: () => { if (guard.handle) gKick(true) },
+			},
+				el('span', { className: 'wog-dot' }),
+				info.text,
+			)
+		}
+
 		// ── 入口 ──────────────────────────────────────────────────────────────
 
 		const inject = ['slots']
 
 		function apply(ctx) {
 			const slots = ctx.get('slots')
-			if (slots === undefined) return
-			slots.inject('settings.section', () => {
-				const dispose = slots.register({
-					name: 'settings.section',
-					id: 'web-optimizer',
-					order: 40,
-					label: 'Web 优化器',
-					inject: () => ({}),
-				}, WebOptimizerSection)
-				return () => { dispose() }
-			})
-			return () => { /* 注册清理由 slots.inject 回调的 disposer 承担 */ }
+			const connection = ctx.get('connection')
+			if (slots !== undefined) {
+				slots.inject('settings.section', () => {
+					const dispose = slots.register({
+						name: 'settings.section',
+						id: 'web-optimizer',
+						order: 40,
+						label: 'Web 网络优化器',
+						inject: () => ({}),
+					}, WebOptimizerSection)
+					return () => { dispose() }
+				})
+				if (connection !== undefined) {
+					gAttach(connection)
+					slots.inject('shell.overlay', () => {
+						const dispose = slots.register({
+							name: 'shell.overlay',
+							id: 'web-optimizer-guard',
+							order: 100,
+							label: '连接守护',
+							inject: () => ({}),
+						}, GuardBadge)
+						return () => { dispose() }
+					})
+				}
+			}
+			return () => {
+				// 注册清理由 slots.inject 回调的 disposer 承担;守护资源在这里释放
+				gDetach()
+			}
 		}
 
 		exports.apply = apply
