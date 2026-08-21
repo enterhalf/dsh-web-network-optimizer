@@ -1,5 +1,5 @@
 /**
- * dsh-web-optimizer — Web 优化器(host half).
+ * dsh-web-network-optimizer — Web 优化器(host half).
  *
  * 三件事,全部通过包装 webServer 路由表 handler 实现(与 @xgone/dsh-remote 的
  * 网关同一机制,嵌套顺序无关):
@@ -13,8 +13,14 @@
  *     失去引用,由浏览器自行回收,无需服务端做任何事。
  *     页面外壳/API/认证一律 no-store,保证清单与数据实时。
  *  3. 流量账本:按 key 统计每个响应的请求数 / 原始字节 / 线上字节(压缩后),
- *     持久化到 $DSH_HOME/storages/dsh-web-optimizer/ledger.json,
- *     经 GET /web-optimizer/ledger、POST /web-optimizer/reset 暴露给浏览器面板。
+ *     持久化到 $DSH_HOME/storages/dsh-web-network-optimizer/ledger.json,
+ *     经 GET /web-network-optimizer/ledger、POST /web-network-optimizer/reset 暴露给浏览器面板。
+ *  4. 连接守护:POST /web-network-optimizer/kick 销毁 webServer 当前持有的全部
+ *     upgrade socket(即 /api/events.mux、/api/events.host 等 WebSocket
+ *     下连)。浏览器立刻收到 onclose → ConnectionController 自动重连 →
+ *     runtime 在 onConnected 时 resync。用于移动端后台冻结后的
+ *     "僵尸连接"(OS 静默切断 TCP、close 事件永不补发)的外科手术式恢复,
+ *     无需整页刷新。客户端探测逻辑与状态徽章见 client half。
  *
  * key 规则:/plugins/<id>/... → plugin:<id>;/assets/* → frontend-core;
  * /api/<m> → api:<m>;/auth/* → auth;其余按路径归类。
@@ -28,7 +34,7 @@ const name = 'web-optimizer'
 const inject = ['webServer']
 
 /** 包装标记,防止热重载时二次包装。 */
-const WRAPPED = Symbol('dsh-web-optimizer.wrapped')
+const WRAPPED = Symbol('dsh-web-network-optimizer.wrapped')
 /** wrapped -> original,模块级保存,热重载卸载/重装可逆。 */
 const wrappedOriginals = new Map()
 
@@ -55,7 +61,7 @@ function dshHome() {
 	return process.env.DSH_HOME || join(homedir(), '.dsh')
 }
 function ledgerFilePath() {
-	return join(dshHome(), 'storages', 'dsh-web-optimizer', 'ledger.json')
+	return join(dshHome(), 'storages', 'dsh-web-network-optimizer', 'ledger.json')
 }
 
 function dayKey(atMs) {
@@ -102,14 +108,14 @@ function createLedger() {
 
 	function persist() {
 		try {
-			const dir = join(dshHome(), 'storages', 'dsh-web-optimizer')
+			const dir = join(dshHome(), 'storages', 'dsh-web-network-optimizer')
 			mkdirSync(dir, { recursive: true })
 			const tmp = ledgerFilePath() + '.tmp'
 			writeFileSync(tmp, JSON.stringify(serialize(), null, 1))
 			renameSync(tmp, ledgerFilePath())
 		} catch (error) {
 			if (typeof console !== 'undefined' && console.warn) {
-				console.warn('[dsh-web-optimizer] 账本写入失败:', error?.message ?? error)
+				console.warn('[dsh-web-network-optimizer] 账本写入失败:', error?.message ?? error)
 			}
 		}
 	}
@@ -245,7 +251,7 @@ function cacheControlFor(pathname, url) {
 	if (typeof url === 'string' && url.includes('rev=')) return 'public, max-age=31536000, immutable'
 	if (pathname === '/favicon.svg') return 'public, max-age=31536000, immutable'
 	if (pathname === '/' || pathname === '/index.html') return 'no-store'
-	if (pathname.startsWith('/api') || pathname.startsWith('/auth') || pathname.startsWith('/web-optimizer')) return 'no-store'
+	if (pathname.startsWith('/api') || pathname.startsWith('/auth') || pathname.startsWith('/web-network-optimizer')) return 'no-store'
 	return null
 }
 
@@ -263,7 +269,7 @@ function keyFor(pathname) {
 		return { key: `api:${seg}`, label: `API · ${seg}` }
 	}
 	if (pathname === '/auth' || pathname.startsWith('/auth/')) return { key: 'auth', label: '登录认证' }
-	if (pathname === '/web-optimizer' || pathname.startsWith('/web-optimizer/')) return { key: 'web-optimizer', label: '优化器 API' }
+	if (pathname === '/web-network-optimizer' || pathname.startsWith('/web-network-optimizer/')) return { key: 'web-optimizer', label: '优化器 API' }
 	if (pathname === '/') return { key: 'shell', label: '页面外壳' }
 	if (pathname === '/favicon.svg' || pathname === '/manifest.webmanifest') return { key: 'misc', label: 'favicon/manifest' }
 	return { key: 'other', label: '其他' }
@@ -455,7 +461,7 @@ function unwrapTraffic(handler) {
 	return wrappedOriginals.get(handler) ?? handler
 }
 
-// ── /web-optimizer HTTP 平面 ─────────────────────────────────────────────────────
+// ── /web-network-optimizer HTTP 平面 ─────────────────────────────────────────────────────
 
 function jsonOut(res, status, obj) {
 	const body = JSON.stringify(obj)
@@ -493,11 +499,11 @@ function readJsonBody(req, limitBytes) {
 
 async function handleNetMeter(req, res, ledger) {
 	const pathname = pathnameOf(req)
-	if (pathname === '/web-optimizer/ledger' && req.method === 'GET') {
+	if (pathname === '/web-network-optimizer/ledger' && req.method === 'GET') {
 		jsonOut(res, 200, ledger.snapshot())
 		return
 	}
-	if (pathname === '/web-optimizer/reset' && req.method === 'POST') {
+	if (pathname === '/web-network-optimizer/reset' && req.method === 'POST') {
 		await readJsonBody(req, 4096)
 		ledger.reset()
 		jsonOut(res, 200, { ok: true })
@@ -515,7 +521,7 @@ function apply(ctx, config) {
 	const minBytes = Number(config?.minBytes ?? MIN_BYTES) || MIN_BYTES
 	const ledger = createLedger()
 	if (typeof console !== 'undefined' && console.log) {
-		console.log(`[dsh-web-optimizer] 已加载,账本:${ledger.path}`)
+		console.log(`[dsh-web-network-optimizer] 已加载,账本:${ledger.path}`)
 	}
 
 	const originalRegister = webServer.register.bind(webServer)
@@ -529,10 +535,10 @@ function apply(ctx, config) {
 	wrapAll()
 	webServer.register = (route) => originalRegister({ ...route, handler: wrapTraffic(route.handler, ledger, minBytes) })
 
-	// /web-optimizer 平面(经当前 register,若 remote 网关在则会一并加认证)。
+	// /web-network-optimizer 平面(经当前 register,若 remote 网关在则会一并加认证)。
 	const disposeRoute = webServer.register({
 		kind: 'prefix',
-		path: '/web-optimizer',
+		path: '/web-network-optimizer',
 		handler: (req, res) => handleNetMeter(req, res, ledger),
 	})
 

@@ -1,17 +1,17 @@
 /**
- * dsh-web-optimizer — 浏览器端 bundle(单文件,经 __ModuleLoader__ 加载)。
+ * dsh-web-network-optimizer — 浏览器端 bundle(单文件,经 __ModuleLoader__ 加载)。
  *
  * 设置页新增「Web 优化器」分节(settings.section):
  *   - 本次加载:基于 performance.getEntriesByType('resource'),按组件分组展示
  *     实际传输字节(transferSize)、解压后大小与缓存命中数;
- *   - 累计账本:GET /web-optimizer/ledger 拉取服务端分插件流量统计(请求数、
+ *   - 累计账本:GET /web-network-optimizer/ledger 拉取服务端分插件流量统计(请求数、
  *     线上流量、原始大小、压缩节省、占比),5 秒轮询;
  *   - 操作:刷新 / 重置账本(两步确认)。
  *
  * 样式全部使用 --dsw-* 主题变量,跟随全局亮/暗主题。
  */
 window.__ModuleLoader__.load({
-	id: 'dsh-web-optimizer',
+	id: 'dsh-web-network-optimizer',
 	factory: (require) => {
 		const module = { exports: {} }
 		const exports = module.exports
@@ -22,8 +22,8 @@ window.__ModuleLoader__.load({
 
 		// ── 常量 ──────────────────────────────────────────────────────────────
 
-		const API_LEDGER = '/web-optimizer/ledger'
-		const API_RESET = '/web-optimizer/reset'
+		const API_LEDGER = '/web-network-optimizer/ledger'
+		const API_RESET = '/web-network-optimizer/reset'
 		const POLL_MS = 5000
 
 		const CSS = [
@@ -62,7 +62,7 @@ window.__ModuleLoader__.load({
 			styleInjected = true
 			try {
 				const tag = document.createElement('style')
-				tag.id = 'dsh-web-optimizer-style'
+				tag.id = 'dsh-web-network-optimizer-style'
 				tag.textContent = CSS
 				document.head.appendChild(tag)
 			} catch { /* 样式失败不影响功能 */ }
@@ -106,7 +106,7 @@ window.__ModuleLoader__.load({
 				return 'api:' + (path.slice(5).split('/')[0] || 'api')
 			}
 			if (path === '/auth' || path.startsWith('/auth/')) return 'auth'
-			if (path === '/web-optimizer' || path.startsWith('/web-optimizer/')) return 'web-optimizer'
+			if (path === '/web-network-optimizer' || path.startsWith('/web-network-optimizer/')) return 'web-optimizer'
 			if (path === '/') return 'shell'
 			if (path === '/favicon.svg' || path === '/manifest.webmanifest') return 'misc'
 			return 'other'
