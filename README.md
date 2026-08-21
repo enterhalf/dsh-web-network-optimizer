@@ -30,16 +30,18 @@
 
 ## 安装
 
-从 GitHub Release 安装（tgz 附件）：
+**方式一：dsh-market 一键安装**——收录于 [awesome-dsh-plugin](https://awesome-dsh-plugin.com) 精选列表后，打开 设置 → 插件市场，搜索 `dsh-web-optimizer` 点装（npm 通道，秒级）。
+
+**方式二：npm**（已发布后）：
 
 ```bash
-dsh plugin --profile web add https://github.com/TomIsFat/dsh-web-optimizer/releases/download/v0.1.0/dsh-web-optimizer-0.1.0.tgz
+dsh plugin --profile web add dsh-web-optimizer
 ```
 
-或本地构建后安装：
+**方式三：本地目录**（从 [GitHub Release](https://github.com/TomIsFat/dsh-web-optimizer/releases) 下载 tgz 或克隆仓库）：
 
 ```bash
-bash scripts/build.sh && node scripts/build-client.mjs   # 产出 lib/
+bash scripts/build.sh && node scripts/build-client.mjs   # 产出 lib/（Release 附件已含 lib/）
 dsh plugin --profile web add /path/to/dsh-web-optimizer
 ```
 
