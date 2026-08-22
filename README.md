@@ -36,10 +36,8 @@
 
 ## 安装
 
-本地目录安装（[GitHub Release](https://github.com/enterhalf/dsh-web-network-optimizer/releases) 的 tgz 已含 `lib/`，解压即用；也可克隆仓库先 `npm run build && npm run build:client`）：
-
 ```bash
-dsh plugin --profile web add /path/to/dsh-web-network-optimizer
+dsh plugin --profile web add dsh-web-network-optimizer@latest
 ```
 
 卸载：
@@ -57,6 +55,7 @@ dsh plugin --profile web remove dsh-web-network-optimizer
 ```bash
 npm run build          # 校验并产出 lib/index.js
 npm run build:client   # 校验并产出 lib/client.js
+dsh plugin --profile web add /path/to/dsh-web-network-optimizer   # 本地目录安装（开发用）
 ```
 
 ## License

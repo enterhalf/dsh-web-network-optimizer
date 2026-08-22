@@ -36,10 +36,8 @@ A small dot is always shown to the **left of the conversation title** — color 
 
 ## Installation
 
-Install from a local directory (the [GitHub Release](https://github.com/enterhalf/dsh-web-network-optimizer/releases) tgz already contains `lib/`, extract and use; or clone the repo and run `npm run build && npm run build:client` first):
-
 ```bash
-dsh plugin --profile web add /path/to/dsh-web-network-optimizer
+dsh plugin --profile web add dsh-web-network-optimizer@latest
 ```
 
 Uninstall:
@@ -57,6 +55,7 @@ Cache semantics: resource URLs carry a content hash `rev=` — on update, change
 ```bash
 npm run build          # validate and produce lib/index.js
 npm run build:client   # validate and produce lib/client.js
+dsh plugin --profile web add /path/to/dsh-web-network-optimizer   # install from a local directory (development)
 ```
 
 ## License
