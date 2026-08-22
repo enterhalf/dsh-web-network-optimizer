@@ -79,8 +79,10 @@ window.__ModuleLoader__.load({
 			// 不写死头部坐标(窄屏标题行有让位抽屉开关的额外缩进),也不给共享的
 			// titleCluster 加定位上下文(会连带改变同槽位内其他绝对定位元素的参照系);
 			// 标题簇让位 8px。属性包含选择器[class*=...]对 CSS-module 哈希前缀免疫。
-			'.wog-chip{position:absolute;left:var(--wog-title-x,20px);top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:auto;max-width:12px;height:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
-			'.wog-chip:hover{max-width:320px;height:22px;top:18px;padding:0 12px 0 0;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
+			// 悬停展开为胶囊时:左缘同步左移 12px 并补 12px 左内边距 → 胶囊以圆点为
+			// 中心对称展开(左右各留 12px),圆点不贴左缘;left 参与过渡,两侧平滑生长。
+			'.wog-chip{position:absolute;left:var(--wog-title-x,20px);top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:auto;max-width:12px;height:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,left .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
+			'.wog-chip:hover{max-width:320px;height:22px;top:18px;left:calc(var(--wog-title-x,20px) - 12px);padding:0 12px;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
 			'.wog-dot{width:10px;height:10px;border-radius:50%;flex:none}',
 			'.wog-text{display:none}',
 			'.wog-chip:hover .wog-text{display:inline;margin-left:8px}',
