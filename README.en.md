@@ -1,8 +1,10 @@
 # dsh-web-network-optimizer (Web Network Optimizer)
 
+[中文](./README.md) | **English**
+
 **dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。**
 
-**Network optimization for the DSH web GUI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
+**Network optimization for the DSH web UI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
 
 1. **Connection Guard** — mobile carriers silently drop the network when the phone goes to the background, leaving the UI "permanently frozen": detected automatically, recovered within 1 second, with connection status shown as a small dot beside the conversation title (green = OK / gray = checking / red pulse = problem) and a manual forced reconnect on click;
 2. **Response Compression** — every compressible response is served as brotli with gzip as fallback, identical behavior on local loopback and remote access;

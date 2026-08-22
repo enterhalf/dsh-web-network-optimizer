@@ -1,8 +1,10 @@
 # dsh-web-network-optimizer（Web 网络优化器）
 
+**中文** | [English](./README.en.md)
+
 **dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。**
 
-**Network optimization for the DSH web GUI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
+**Network optimization for the DSH web UI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
 
 1. **连接守护**——手机切后台后运营商静默断网导致"界面永久卡死"：自动检测、1 秒内自动恢复，连接状态以会话标题左侧的小圆点常显（绿=正常 / 灰=检查中 / 红脉冲=异常），点圆点可手动强制重连；
 2. **响应压缩**——所有可压缩响应下发 brotli、gzip 兜底，本地回环与远程访问行为一致；
