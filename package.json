@@ -1,11 +1,12 @@
 {
   "name": "dsh-web-network-optimizer",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。",
   "type": "module",
   "main": "./lib/index.js",
   "files": [
-    "lib"
+    "lib",
+    "cordis.patch.yml"
   ],
   "license": "MIT",
   "repository": {
