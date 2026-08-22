@@ -5,7 +5,7 @@
  *   - 本次加载:基于 performance.getEntriesByType('resource'),按组件分组展示
  *     实际传输字节(transferSize)、解压后大小与缓存命中数;
  *   - 累计账本:GET /web-network-optimizer/ledger 拉取服务端分插件流量统计(请求数、
- *     线上流量、原始大小、压缩节省、占比),5 秒轮询;
+ *     线上流量、原始大小、压缩节省、占比),进页面时加载一次,手动「刷新」更新;
  *   - 操作:刷新 / 重置账本(两步确认)。
  *
  * 连接守护(会话标题左侧圆点):移动端切后台 TCP 被运营商静默切断时,
@@ -34,7 +34,6 @@ window.__ModuleLoader__.load({
 		const API_LEDGER = '/web-network-optimizer/ledger'
 		const API_RESET = '/web-network-optimizer/reset'
 		const API_KICK = '/web-network-optimizer/kick'
-		const POLL_MS = 5000
 
 		// 连接守护计时参数
 		const PROBE_TIMEOUT_MS = 4500 // 单层探针超时(描述 RPC / WS 握手)
@@ -63,7 +62,8 @@ window.__ModuleLoader__.load({
 			'.wo-key{max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary)}',
 			'.wo-key.dim{color:var(--dsw-alias-label-secondary)}',
 			'.wo-bar{display:inline-block;width:90px;height:6px;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover);overflow:hidden;vertical-align:middle;margin-right:8px}',
-			'.wo-bar-fill{height:100%;border-radius:3px;background:var(--dsw-alias-state-business-primary)}',
+			// span 默认是 inline 元素,width/height 不生效,进度填充块必须 block 才有尺寸
+			'.wo-bar-fill{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-state-business-primary)}',
 			'.wo-badge{display:inline-block;font-size:11px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l1);border-radius:999px;padding:0 8px;margin-left:6px}',
 			'.wo-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
 			'.wo-btn{font:inherit;font-size:12px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-button-elevated-fill);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:5px 12px;cursor:pointer}',
@@ -234,10 +234,9 @@ window.__ModuleLoader__.load({
 				}
 			}, [])
 
+			// 账本只在看面板时加载一次,后续由「刷新」按钮手动更新,面板开着也不发请求
 			React.useEffect(() => {
 				refresh()
-				const timer = setInterval(() => { refresh() }, POLL_MS)
-				return () => clearInterval(timer)
 			}, [refresh])
 
 			const onManualRefresh = () => {
@@ -339,7 +338,7 @@ window.__ModuleLoader__.load({
 				),
 				el('section', null,
 					el('h3', { className: 'wo-h' }, '累计账本(按组件)',
-						el('span', { className: 'wo-badge' }, `${POLL_MS / 1000}s 轮询`)),
+						el('span', { className: 'wo-badge' }, '手动刷新')),
 					error
 						? el('p', { className: 'wo-msg err' }, '账本读取失败:' + error)
 						: keys.length === 0
