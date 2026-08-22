@@ -74,10 +74,13 @@ window.__ModuleLoader__.load({
 			'.wo-msg.err{color:var(--dsw-alias-state-error-primary)}',
 			'.wo-empty{font-size:12px;color:var(--dsw-alias-label-tertiary);padding:14px 10px}',
 			// 圆点定位在会话标题左侧:挂在 conversation.session.header.actions 槽位内,
-			// 用绝对定位脱离 flex 流,贴到头部左缘;标题簇让出左侧空间。
+			// 用绝对定位脱离 flex 流。定位上下文(含块)是标题簇 titleCluster(position:relative)
+			// ——圆点即「标题前面的指示点」:贴标题簇左缘(left:0)、垂直对中标题(top:50% +
+			// translateY(-50%)),位置由标题自身定义,随标题在任何布局(桌面头部左缘 / 窄屏
+			// 标题行缩进 / 侧边栏抽屉开关让位等)下自然归位,不写死头部坐标;标题簇让位 8px。
 			// 属性包含选择器[class*=...]对 CSS-module 哈希前缀免疫(核心升级换哈希也不破)。
-			'.wog-chip{position:absolute;left:20px;top:22px;z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:auto;max-width:12px;height:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,top .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
-			'.wog-chip:hover{max-width:320px;height:22px;top:18px;padding:0 12px 0 0;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
+			'.wog-chip{position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:1;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-size:12px;line-height:18px;width:auto;max-width:12px;height:12px;padding:0;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap;overflow:hidden;transition:max-width .18s ease,height .18s ease,padding .18s ease,border-color .18s ease,background-color .18s ease}',
+			'.wog-chip:hover{max-width:320px;height:22px;padding:0 12px 0 0;border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-button-floating-fill);box-shadow:0 1px 6px rgba(0,0,0,.12)}',
 			'.wog-dot{width:10px;height:10px;border-radius:50%;flex:none}',
 			'.wog-text{display:none}',
 			'.wog-chip:hover .wog-text{display:inline;margin-left:8px}',
@@ -85,7 +88,7 @@ window.__ModuleLoader__.load({
 			'.wog-chip.wog-neutral .wog-dot{background:var(--dsw-alias-label-tertiary)}',
 			'.wog-chip.wog-err{color:var(--dsw-alias-state-error-primary)}',
 			'.wog-chip.wog-err .wog-dot{background:var(--dsw-alias-state-error-primary);animation:wog-pulse 1.2s ease-in-out infinite}',
-			'[class*="titleCluster"]{padding-left:8px}',
+			'[class*="titleCluster"]{position:relative;padding-left:8px}',
 			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
