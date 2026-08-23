@@ -6,7 +6,9 @@
  *     实际传输字节(transferSize)、解压后大小与缓存命中数;
  *   - 累计账本:GET /web-network-optimizer/ledger 拉取服务端分插件流量统计(请求数、
  *     线上流量、原始大小、压缩节省、占比),进页面时加载一次,手动「刷新」更新;
- *   - 操作:刷新 / 重置账本(两步确认)。
+ *   - 操作:刷新 / 重置账本(两步确认);
+ *   - 缓存自检:怀疑浏览器缓存没跟上时,展示可复制的手动清除指引
+ *     (浏览器未开放清除 HTTP 缓存的 JS API,只能菜单操作)。
  *
  * 连接守护(会话标题左侧圆点):移动端切后台 TCP 被运营商静默切断时,
  * WebSocket 永远 OPEN、连接控制器永不重连 → 界面永久卡死。三层主动探针
@@ -34,6 +36,13 @@ window.__ModuleLoader__.load({
 		const API_LEDGER = '/web-network-optimizer/ledger'
 		const API_RESET = '/web-network-optimizer/reset'
 		const API_KICK = '/web-network-optimizer/kick'
+
+		// DevTools 手动清缓存三选一(Chrome/Edge 菜单;Firefox/Safari 位置相近)
+		const CACHE_STEPS = [
+			'按 F12 打开 DevTools → 右键浏览器地址栏的"重新加载"按钮 → 选择"Empty Cache and Hard Reload"(清空缓存并硬性重新加载)',
+			'DevTools → Network(网络)面板 → 勾选 Disable cache(禁用缓存,DevTools 开着期间持续生效)→ 刷新一次页面 → 取消勾选',
+			'DevTools → Application(应用)面板 → Storage(存储)→ Clear site data(清除站点数据)',
+		]
 
 		// 连接守护计时参数
 		const PROBE_TIMEOUT_MS = 4500 // 单层探针超时(描述 RPC / WS 握手)
@@ -65,6 +74,11 @@ window.__ModuleLoader__.load({
 			// span 默认是 inline 元素,width/height 不生效,进度填充块必须 block 才有尺寸
 			'.wo-bar-fill{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-state-business-primary)}',
 			'.wo-badge{display:inline-block;font-size:11px;color:var(--dsw-alias-label-tertiary);border:1px solid var(--dsw-alias-border-l1);border-radius:999px;padding:0 8px;margin-left:6px}',
+			'.wo-steps{display:flex;flex-direction:column;gap:6px;margin:0}',
+			'.wo-step{display:flex;align-items:center;gap:8px}',
+			'.wo-step code{flex:1;min-width:0;font-size:11px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:6px 8px;color:var(--dsw-alias-label-secondary);line-height:17px;white-space:pre-wrap;word-break:break-all}',
+			'.wo-copy{flex:none;font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);cursor:pointer}',
+			'.wo-copy.ok{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}',
 			'.wo-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}',
 			'.wo-btn{font:inherit;font-size:12px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-button-elevated-fill);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:5px 12px;cursor:pointer}',
 			'.wo-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}',
@@ -94,15 +108,24 @@ window.__ModuleLoader__.load({
 			'@keyframes wog-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
 		].join('\n')
 
-		let styleInjected = false
+		// 归属预打标(对齐 dsh-taskboard 0.4.4+ 的同款修复):样式在 apply/渲染期注入,
+		// 晚于本模块 materialize 时的 claimStyles 认领点;不打标会被随后完成
+		// materialize 的兄弟插件认领,该插件 HMR 重建时 removeOwnedStyles 会删掉
+		// 我们的样式表(CSS 随机掉色的根因)。预打标后兄弟认领跳过带标 style,
+		// 只有本插件自己的重建会删它(重跑即重新注入);幂等用 DOM 判断而非模块
+		// 标志,才能看见"被删"并在下次渲染重新注入;找到存量元素时补打标,
+		// 跨热替换遗留的误归属标签随之自愈。
 		function ensureStyle() {
-			if (styleInjected) return
-			styleInjected = true
 			try {
-				const tag = document.createElement('style')
-				tag.id = 'dsh-web-network-optimizer-style'
-				tag.textContent = CSS
-				document.head.appendChild(tag)
+				let tag = document.getElementById('dsh-web-network-optimizer-style')
+				if (tag === null) {
+					tag = document.createElement('style')
+					tag.id = 'dsh-web-network-optimizer-style'
+					tag.textContent = CSS
+					document.head.appendChild(tag)
+				}
+				tag.dataset.plugin = 'dsh-web-network-optimizer'
+				tag.dataset.pluginCss = 'dsh-web-network-optimizer/styles'
 			} catch { /* 样式失败不影响功能 */ }
 		}
 
@@ -222,6 +245,7 @@ window.__ModuleLoader__.load({
 			const [busy, setBusy] = React.useState(false)
 			const [confirmReset, setConfirmReset] = React.useState(false)
 			const [resetMsg, setResetMsg] = React.useState('')
+			const [copiedStep, setCopiedStep] = React.useState(-1)
 
 			const refresh = React.useCallback(async () => {
 				try {
@@ -258,6 +282,17 @@ window.__ModuleLoader__.load({
 					.finally(() => setBusy(false))
 			}
 
+			// 复制缓存自检步骤(clipboard API,localhost 属安全上下文可用)
+			const copyStep = (i, text) => {
+				const done = () => {
+					setCopiedStep(i)
+					window.setTimeout(() => setCopiedStep((cur) => (cur === i ? -1 : cur)), 1500)
+				}
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard.writeText(text).then(done).catch(() => {})
+				}
+			}
+
 			const totals = ledger?.totals ?? { requests: 0, raw: 0, wire: 0, saved: 0 }
 			const keys = ledger?.keys ?? []
 			const today = ledger?.days?.[0] ?? null
@@ -268,9 +303,11 @@ window.__ModuleLoader__.load({
 
 			return el('div', { className: 'wo-root' },
 				el('p', { className: 'wo-note' },
-					'本插件对所有响应做 brotli/gzip 压缩(本地与远程一致),并给内容哈希资源(/assets、/plugins、rev= URL)下发 ',
+					'本插件对所有响应做 brotli/gzip 压缩(本地与远程一致),并按资源类型管理缓存:/assets、favicon 下发 ',
 					el('code', null, 'Cache-Control: immutable'),
-					':浏览器首次下载后长期复用,再次进入页面几乎零流量。插件更新 → 内容变化 → 新 rev → 自动重新下载;插件卸载 → 旧缓存失去引用,由浏览器自行回收。'),
+					'(文件名即内容哈希,更新必然换 URL,复访零流量);插件 client.js 保留 ',
+					el('code', null, 'no-cache'),
+					' 并补发 ETag——每次加载只做条件再验证,内容未变服务器答 304(仅响应头几十字节),变了自动换新内容,近乎零流量且永远新鲜。若怀疑浏览器缓存没跟上(极少见),见下方「缓存自检」。'),
 				el('div', { className: 'wo-cards' },
 					el('div', { className: 'wo-card' },
 						el('p', { className: 'wo-card-title' }, '本次加载流量'),
@@ -379,6 +416,20 @@ window.__ModuleLoader__.load({
 									),
 								),
 							),
+				),
+				el('section', null,
+					el('h3', { className: 'wo-h' }, '缓存自检(手动清除浏览器缓存)'),
+					el('p', { className: 'wo-note' },
+						'浏览器没有开放"清除 HTTP 缓存"的 JS 指令(这正是此前服务端强刷手段对已缓存资源无效的原因),只能在 DevTools 菜单里操作。ETag 机制生效后正常插件更新必然自动跟上,以下仅在怀疑缓存异常时三选一,执行后刷新页面即可:'),
+					el('div', { className: 'wo-steps' },
+						CACHE_STEPS.map((text, i) => el('div', { className: 'wo-step', key: i },
+							el('code', null, text),
+							el('button', {
+								className: 'wo-copy' + (copiedStep === i ? ' ok' : ''),
+								onClick: () => copyStep(i, text),
+							}, copiedStep === i ? '已复制' : '复制'),
+						)),
+					),
 				),
 				el('div', { className: 'wo-actions' },
 					el('button', { className: 'wo-btn', disabled: busy, onClick: onManualRefresh }, '刷新'),

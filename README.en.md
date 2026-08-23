@@ -8,8 +8,9 @@
 
 1. **Connection Guard** — mobile carriers silently drop the network when the phone goes to the background, leaving the UI "permanently frozen": detected automatically, recovered within 1 second, with connection status shown as a small dot beside the conversation title (green = OK / gray = checking / red pulse = problem) and a manual forced reconnect on click;
 2. **Response Compression** — every compressible response is served as brotli with gzip as fallback, identical behavior on local loopback and remote access;
-3. **Browser Caching** — content-hashed resources (`rev=` URLs, `/assets/*`, favicon) are served with `Cache-Control: immutable`, so a second visit transfers almost nothing;
-4. **Per-Plugin Traffic Ledger** — the Settings → **Web Network Optimizer** panel shows, in real time, how much traffic each plugin uses per load and in total, how much compression saved, and cache-hit status.
+3. **Browser Caching** — `/assets/*` and the favicon are content-hashed by filename (an update always yields a new URL), so they are served with `Cache-Control: immutable` and a second visit transfers almost nothing; plugin `client.js` (`rev=` URLs) keeps `no-cache` and the plugin adds an ETag — every load is a conditional revalidation: unchanged content gets a 304 (header bytes only), changed content is delivered fresh, near-zero traffic and always up to date;
+4. **Per-Plugin Traffic Ledger** — the Settings → **Web Network Optimizer** panel shows, in real time, how much traffic each plugin uses per load and in total, how much compression saved, and cache-hit status;
+5. **Cache Self-Check** — when you suspect the browser cache has not caught up with an update, the panel offers three one-click-copyable DevTools steps for clearing the browser cache manually.
 
 ## Measured Results
 
@@ -48,7 +49,9 @@ dsh plugin --profile web remove dsh-web-network-optimizer
 
 Uninstalling restores the route wrapping completely; the ledger file is kept in `~/.dsh/storages/dsh-web-network-optimizer/` for review, and orphaned cache is reclaimed by the browser's own quota.
 
-Cache semantics: resource URLs carry a content hash `rev=` — on update, changed content → new URL, old cache is naturally invalidated.
+Cache semantics: `/assets` and the favicon rely on content-hashed filenames — on update, changed content → new filename → new URL, so the old cache is naturally invalidated and `immutable` is safe; plugin `client.js` uses `no-cache + ETag` — every load revalidates conditionally (304 if unchanged, fresh content otherwise), which does not depend on URL changes and eliminates the "cache out of sync" blind spot (`immutable` means the browser never requests again, so no server-side technique can keep up with file changes — it is therefore reserved for filename-hashed resources only).
+
+Cache self-check: extreme cases (a misbehaving browser cache, a rewriting proxy, etc.) can still leave stale content behind. Browsers expose no JavaScript API to clear the HTTP cache, so the panel's **Cache Self-Check** section lists three one-click-copyable DevTools steps (right-click the reload button → "Empty Cache and Hard Reload" / Network panel → "Disable cache" / Application panel → "Clear site data") — pick one and execute it manually once.
 
 ## Development
 
