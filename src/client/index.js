@@ -56,18 +56,23 @@ window.__ModuleLoader__.load({
 		const CSS = [
 			'.wo-root{display:flex;flex-direction:column;gap:18px;padding:4px 2px 24px;font-size:13px;color:var(--dsw-alias-label-primary)}',
 			'.wo-note{font-size:12px;color:var(--dsw-alias-label-tertiary);line-height:19px;margin:0}',
-			'.wo-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}',
-			'.wo-card{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:12px 14px;background:var(--dsw-alias-bg-layer-1);min-width:0}',
-			'.wo-card-title{font-size:11px;color:var(--dsw-alias-label-tertiary);margin:0 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-			'.wo-card-value{font-size:18px;line-height:24px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-			'.wo-card-sub{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+			'.wo-dims{display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}',
+			'.wo-dim{display:grid;grid-template-columns:52px 1fr 1fr;gap:8px;align-items:center;padding:10px 14px;min-width:0}',
+			'.wo-dim+.wo-dim{border-top:1px solid var(--dsw-alias-border-l1)}',
+			'.wo-dim-name{font-size:13px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-align:center;border-right:1px solid var(--dsw-alias-border-l1)}',
+			'.wo-metric{display:flex;align-items:center;justify-content:center;gap:24px;min-width:0}',
+			'.wo-metric-main{min-width:0;text-align:center}',
+			'.wo-metric:first-of-type{border-right:1px solid var(--dsw-alias-border-l1)}',
+			'.wo-metric-value{font-size:18px;line-height:24px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+			'.wo-metric-sub{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+			'.wo-save{flex:none;font-size:20px;line-height:24px;font-weight:700;color:var(--dsw-alias-state-success-primary);font-variant-numeric:tabular-nums;white-space:nowrap}',
 			'.wo-h{font-size:13px;font-weight:600;margin:0 0 8px}',
 			'.wo-scroll{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:auto;max-height:340px}',
 			'.wo-table{width:100%;border-collapse:collapse;font-size:12px}',
-			'.wo-table th,.wo-table td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);white-space:nowrap}',
+			'.wo-table th,.wo-table td{text-align:center;padding:7px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);white-space:nowrap}',
 			'.wo-table th{color:var(--dsw-alias-label-tertiary);font-weight:500;position:sticky;top:0;background:var(--dsw-alias-bg-layer-1)}',
 			'.wo-table tr:last-child td{border-bottom:none}',
-			'.wo-table .num{text-align:right;font-variant-numeric:tabular-nums}',
+			'.wo-table .num{text-align:center;font-variant-numeric:tabular-nums}',
 			'.wo-key{max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary)}',
 			'.wo-key.dim{color:var(--dsw-alias-label-secondary)}',
 			'.wo-bar{display:inline-block;width:90px;height:6px;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover);overflow:hidden;vertical-align:middle;margin-right:8px}',
@@ -306,6 +311,32 @@ window.__ModuleLoader__.load({
 
 			const zeroTraffic = load !== null && load.totalTransfer === 0
 
+			// 节省百分比(绿色):分母>0 时 1 - 线上/解压(或原始),否则 0
+			const savePct = (decoded, wire) => (decoded > 0 ? Math.round((1 - wire / decoded) * 100) : 0)
+			const loadSavePct = load ? savePct(load.totalDecoded, load.totalTransfer) : 0
+			const hitPct = load && load.total > 0 ? Math.round((load.cached / load.total) * 100) : 0
+			const cumSavePct = savePct(totals.raw, totals.wire)
+			const todaySavePct = today && today.raw > 0 ? Math.round(((today.raw - today.wire) / today.raw) * 100) : 0
+			const todayHits = today?.hits ?? 0
+			const todayHitPct = today && today.requests > 0 ? Math.round((todayHits / today.requests) * 100) : 0
+			const cumHits = totals.hits ?? 0
+			const cumHitPct = totals.requests > 0 ? Math.round((cumHits / totals.requests) * 100) : 0
+			// 三维度对比表:每行一个维度(本次/今日/累计),行内左流量右请求
+			// 指标两行:主值 + 说明(左),绿色百分比靠右(space-between 隐形分隔),
+			// 指标列间有可见分隔线,名称列右侧也有分隔线
+			const metric = (value, save, sub) => el('div', { className: 'wo-metric' },
+				el('div', { className: 'wo-metric-main' },
+					el('div', { className: 'wo-metric-value' }, value),
+					el('div', { className: 'wo-metric-sub' }, sub),
+				),
+				save === null ? null : el('div', { className: 'wo-save' }, save),
+			)
+			const dimRow = (name, tip, flow, req) => el('div', { className: 'wo-dim' },
+				el('span', { className: 'wo-dim-name', title: tip || undefined }, name),
+				flow,
+				req,
+			)
+
 			return el('div', { className: 'wo-root' },
 				el('p', { className: 'wo-note' },
 					'本插件对所有响应做 brotli/gzip 压缩(本地与远程一致),并按资源类型管理缓存:/assets、favicon 下发 ',
@@ -313,37 +344,28 @@ window.__ModuleLoader__.load({
 					'(文件名即内容哈希,更新必然换 URL,复访零流量);插件 client.js 保留 ',
 					el('code', null, 'no-cache'),
 					' 并补发 ETag——每次加载只做条件再验证,内容未变服务器答 304(仅响应头几十字节),变了自动换新内容,近乎零流量且永远新鲜。若怀疑浏览器缓存没跟上(极少见),见下方「缓存自检」。'),
-				el('div', { className: 'wo-cards' },
-					el('div', { className: 'wo-card' },
-						el('p', { className: 'wo-card-title' }, '本次加载流量'),
-						el('p', { className: 'wo-card-value' }, load ? fmtBytes(load.totalTransfer) : '…'),
-						el('p', { className: 'wo-card-sub' },
-							load
-								? (zeroTraffic
-									? '全部来自缓存 — 这正是目标'
-									: `解压后 ${fmtBytes(load.totalDecoded)}`)
-								: ''),
-					),
-					el('div', { className: 'wo-card' },
-						el('p', { className: 'wo-card-title' }, '本次请求'),
-						el('p', { className: 'wo-card-value' }, load ? String(load.total) : '…'),
-						el('p', { className: 'wo-card-sub' }, load ? `其中 ${load.cached} 个缓存命中` : ''),
-					),
-					el('div', { className: 'wo-card' },
-						el('p', { className: 'wo-card-title' }, '累计线上流量'),
-						el('p', { className: 'wo-card-value' }, fmtBytes(totals.wire)),
-						el('p', { className: 'wo-card-sub' }, today ? `今日 ${fmtBytes(today.wire)}` : '今日暂无记录'),
-					),
-					el('div', { className: 'wo-card' },
-						el('p', { className: 'wo-card-title' }, '累计请求'),
-						el('p', { className: 'wo-card-value' }, String(totals.requests)),
-						el('p', { className: 'wo-card-sub' }, '自账本建立(或重置)起'),
-					),
-					el('div', { className: 'wo-card' },
-						el('p', { className: 'wo-card-title' }, '压缩节省'),
-						el('p', { className: 'wo-card-value' }, fmtBytes(totals.saved)),
-						el('p', { className: 'wo-card-sub' }, totals.raw > 0 ? `原始 ${fmtBytes(totals.raw)}` : ''),
-					),
+				// 三维度对比表:本次 / 今日 / 累计,每行左流量右请求
+				el('div', { className: 'wo-dims' },
+					dimRow('本次',
+						'当前页面加载',
+						metric(load ? fmtBytes(load.totalTransfer) : '…',
+							load ? `节省 ${loadSavePct}%` : null,
+							load ? (zeroTraffic ? '全部来自缓存 — 这正是目标' : `解压后 ${fmtBytes(load.totalDecoded)}`) : ''),
+						metric(load ? load.total + ' 次请求' : '…',
+							load ? `命中 ${hitPct}%` : null,
+							load ? `其中 ${load.cached} 次请求命中缓存` : '')),
+					dimRow('今日',
+						'今日累计的流量与请求',
+						metric(today ? fmtBytes(today.wire) : '暂无记录',
+							today ? `节省 ${todaySavePct}%` : null,
+							today ? `解压后 ${fmtBytes(today.raw)}` : ''),
+						metric(today ? today.requests + ' 次请求' : '暂无记录',
+							today && today.requests > 0 ? `命中 ${todayHitPct}%` : null,
+							today ? `其中 ${todayHits} 次请求命中缓存` : '')),
+					dimRow('累计',
+						'自账本建立(或重置)起的累计数据',
+						metric(fmtBytes(totals.wire), `节省 ${cumSavePct}%`, `解压后 ${fmtBytes(totals.raw)}`),
+						metric(totals.requests + ' 次请求', `命中 ${cumHitPct}%`, `其中 ${cumHits} 次请求命中缓存`)),
 				),
 				el('section', null,
 					el('h3', { className: 'wo-h' }, '本次页面加载',

@@ -92,7 +92,7 @@ function createLedger() {
 		version: 1,
 		createdAt: Date.now(),
 		updatedAt: 0,
-		totals: { requests: 0, raw: 0, wire: 0 },
+		totals: { requests: 0, raw: 0, wire: 0, hits: 0 },
 		keys: Object.create(null),
 		days: Object.create(null),
 	}
@@ -111,6 +111,7 @@ function createLedger() {
 						requests: Number(parsed.totals.requests) || 0,
 						raw: Number(parsed.totals.raw) || 0,
 						wire: Number(parsed.totals.wire) || 0,
+						hits: Number(parsed.totals.hits) || 0,
 					}
 				}
 				if (parsed.keys && typeof parsed.keys === 'object') state.keys = parsed.keys
@@ -162,7 +163,7 @@ function createLedger() {
 		return { ...state }
 	}
 
-	function bump(key, label, raw, wire) {
+	function bump(key, label, raw, wire, hit) {
 		const at = Date.now()
 		const entry = state.keys[key] ?? { requests: 0, raw: 0, wire: 0, lastAt: 0, label: key }
 		if (typeof label === 'string' && label !== '') entry.label = label
@@ -175,10 +176,14 @@ function createLedger() {
 		state.totals.raw += raw
 		state.totals.wire += wire
 		const dk = dayKey(at)
-		const day = state.days[dk] ?? { requests: 0, raw: 0, wire: 0 }
+		const day = state.days[dk] ?? { requests: 0, raw: 0, wire: 0, hits: 0 }
 		day.requests += 1
 		day.raw += raw
 		day.wire += wire
+		if (hit) {
+			state.totals.hits = (state.totals.hits || 0) + 1
+			day.hits = (day.hits || 0) + 1
+		}
 		state.days[dk] = day
 		state.updatedAt = at
 		if (flushTimer === null) {
@@ -209,13 +214,13 @@ function createLedger() {
 		const dayRows = Object.entries(state.days)
 			.sort((a, b) => (a[0] < b[0] ? 1 : -1))
 			.slice(0, 14)
-			.map(([day, d]) => ({ day, requests: d.requests, raw: d.raw, wire: d.wire }))
+			.map(([day, d]) => ({ day, requests: d.requests, raw: d.raw, wire: d.wire, hits: d.hits || 0 }))
 		return {
 			ok: true,
 			version: 1,
 			createdAt: state.createdAt,
 			updatedAt: state.updatedAt,
-			totals: { ...state.totals, saved: Math.max(0, state.totals.raw - state.totals.wire) },
+			totals: { ...state.totals, hits: state.totals.hits || 0, saved: Math.max(0, state.totals.raw - state.totals.wire) },
 			keys: entries,
 			days: dayRows,
 			meta: { now },
@@ -225,7 +230,7 @@ function createLedger() {
 	function reset() {
 		state.createdAt = Date.now()
 		state.updatedAt = Date.now()
-		state.totals = { requests: 0, raw: 0, wire: 0 }
+		state.totals = { requests: 0, raw: 0, wire: 0, hits: 0 }
 		state.keys = Object.create(null)
 		state.days = Object.create(null)
 		persist()
@@ -476,10 +481,10 @@ function makeMeasuringRes(res, req, ledger, minBytes) {
 		}
 	}
 
-	function commit() {
+	function commit(hit) {
 		if (committed) return
 		committed = true
-		ledger.bump(k.key, k.label, rawBytes, wireBytes)
+		ledger.bump(k.key, k.label, rawBytes, wireBytes, hit)
 	}
 
 	/** 缓冲模式的收尾:ETag → 304(无体)或 200(+压缩决策)。 */
@@ -496,7 +501,7 @@ function makeMeasuringRes(res, req, ledger, minBytes) {
 			if (!etagKey) h304['etag'] = etag
 			emit(h304)
 			wireBytes = 0
-			commit()
+			commit(true) // 304 再验证记一次命中
 			res.end(cb) // 304 无体,但必须显式结束响应
 			return
 		}
