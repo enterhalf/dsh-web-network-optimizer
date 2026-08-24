@@ -209,7 +209,12 @@ window.__ModuleLoader__.load({
 				g.decoded += d
 				totalTransfer += t
 				totalDecoded += d
-				if (t === 0) { g.cached += 1; cached += 1 }
+				// 命中 = 零流量完全命中(t=0) + 304 再验证(0<t<1KB:线上只有响应头几十字节,
+				// 响应体来自缓存)。Chrome 会把再验证报成 status 200、transferSize≈300(真实
+				// 线上字节),而 decodedBodySize 时而是 0 时而是缓存体大小——不可靠,只看 t。
+				// fetch/xhr 是 API 等 no-store 请求,响应再小也不是命中,必须排除。
+				const itype = String(e.initiatorType || '')
+				if (t === 0 || (t > 0 && t < 1024 && itype !== 'fetch' && itype !== 'xmlhttprequest')) { g.cached += 1; cached += 1 }
 			}
 			const rows = Object.values(groups).sort((a, b) => b.transfer - a.transfer)
 			return { rows, totalTransfer, totalDecoded, cached, total: entries.length, at: Date.now() }
@@ -358,7 +363,11 @@ window.__ModuleLoader__.load({
 									load.rows.map((g) => el('tr', { key: g.key },
 										el('td', { className: 'wo-key' }, labelOf(g.key, ledgerLabels)),
 										el('td', { className: 'num' }, String(g.requests)),
-										el('td', { className: 'num' }, g.transfer === 0 ? el('span', { style: { color: 'var(--dsw-alias-state-success-primary)' } }, '0(缓存)') : fmtBytes(g.transfer)),
+										el('td', { className: 'num' },
+											g.cached === g.requests && g.requests > 0
+												? el('span', { style: { color: 'var(--dsw-alias-state-success-primary)' } },
+													g.transfer === 0 ? '0(缓存)' : fmtBytes(g.transfer) + '(缓存)')
+												: fmtBytes(g.transfer)),
 										el('td', { className: 'num' }, fmtBytes(g.decoded)),
 										el('td', { className: 'num' }, String(g.cached)),
 									)),
