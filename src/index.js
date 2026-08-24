@@ -215,6 +215,10 @@ function createLedger() {
 			.sort((a, b) => (a[0] < b[0] ? 1 : -1))
 			.slice(0, 14)
 			.map(([day, d]) => ({ day, requests: d.requests, raw: d.raw, wire: d.wire, hits: d.hits || 0 }))
+		// 显式"今日"行:按服务器当日(dayKey(now))取数,当日尚无流量时为零值——
+		// 而不是取"最近有流量的一天"(跨午夜/服务器停机后会错标成昨日数据)。
+		const todayKey = dayKey(now)
+		const todayEntry = state.days[todayKey] ?? { requests: 0, raw: 0, wire: 0, hits: 0 }
 		return {
 			ok: true,
 			version: 1,
@@ -223,6 +227,7 @@ function createLedger() {
 			totals: { ...state.totals, hits: state.totals.hits || 0, saved: Math.max(0, state.totals.raw - state.totals.wire) },
 			keys: entries,
 			days: dayRows,
+			today: { day: todayKey, requests: todayEntry.requests, raw: todayEntry.raw, wire: todayEntry.wire, hits: todayEntry.hits || 0 },
 			meta: { now },
 		}
 	}
@@ -236,7 +241,10 @@ function createLedger() {
 		persist()
 	}
 
+	let closed = false
+
 	function close() {
+		closed = true
 		if (flushTimer !== null) {
 			clearTimeout(flushTimer)
 			flushTimer = null
@@ -245,6 +253,13 @@ function createLedger() {
 	}
 
 	load()
+	// 进程正常退出前落盘,避免 1.5s 防抖窗口内的流量丢失。
+	// closed 标记保证已卸载的旧实例退出时不会用陈旧状态覆盖新数据。
+	if (typeof process !== 'undefined' && typeof process.on === 'function') {
+		process.on('exit', () => {
+			if (!closed) persist()
+		})
+	}
 	return { path: ledgerFilePath(), bump, snapshot, reset, close }
 }
 
@@ -348,6 +363,17 @@ function toBuffer(chunk, encoding) {
 	if (typeof chunk === 'string') return Buffer.from(chunk, encoding || 'utf8')
 	if (chunk instanceof Uint8Array) return Buffer.from(chunk)
 	return Buffer.from(String(chunk))
+}
+
+/**
+ * 真实字节数:字符串按编码(默认 utf8)计字节而非字符——中文 1 字符 = 3 字节,
+ * 用 .length 会把 raw/wire 系统性记小(非 ASCII 内容最多差 3 倍)。
+ */
+function byteLen(chunk, encoding) {
+	if (Buffer.isBuffer(chunk)) return chunk.length
+	if (typeof chunk === 'string') return Buffer.byteLength(chunk, encoding || 'utf8')
+	if (chunk instanceof Uint8Array) return chunk.length
+	return Buffer.byteLength(String(chunk), 'utf8')
 }
 
 function etagOf(body) {
@@ -484,6 +510,10 @@ function makeMeasuringRes(res, req, ledger, minBytes) {
 	function commit(hit) {
 		if (committed) return
 		committed = true
+		// HEAD 响应只发响应头、无响应体:Node 会把 body 全部抑制,
+		// 已累积的 chunk 字节并未真正出网,raw/wire 均按零结算。
+		if (req.method === 'HEAD') rawBytes = 0
+		if (req.method === 'HEAD') wireBytes = 0
 		ledger.bump(k.key, k.label, rawBytes, wireBytes, hit)
 	}
 
@@ -536,12 +566,12 @@ function makeMeasuringRes(res, req, ledger, minBytes) {
 	}
 
 	const writeChunk = (chunk, encoding, cb) => {
-		if (chunk) rawBytes += chunk.length
+		if (chunk) rawBytes += byteLen(chunk, encoding)
 		if (encStream) {
 			encStream.write(chunk, encoding, cb)
 			return true
 		}
-		wireBytes += chunk ? chunk.length : 0
+		wireBytes += chunk ? byteLen(chunk, encoding) : 0
 		return res.write(chunk, encoding, cb)
 	}
 
@@ -593,10 +623,13 @@ function makeMeasuringRes(res, req, ledger, minBytes) {
 			}
 			start()
 			if (encStream) {
-				if (chunk !== undefined && chunk !== null) rawBytes += chunk.length
+				if (chunk !== undefined && chunk !== null) rawBytes += byteLen(chunk, encoding)
 				encStream.end(chunk, encoding, cb)
 			} else {
-				wireBytes += chunk ? chunk.length : 0
+				// 末段 chunk 同样必须计入 raw:"一次性 end(body)" 是最常见的响应写法,
+				// 漏计会让"原始大小"系统性偏小(账本出现 raw<wire 的倒挂)。
+				if (chunk !== undefined && chunk !== null) rawBytes += byteLen(chunk, encoding)
+				wireBytes += chunk ? byteLen(chunk, encoding) : 0
 				if (chunk !== undefined && chunk !== null) return res.end(chunk, encoding, cb)
 				return res.end(cb)
 			}

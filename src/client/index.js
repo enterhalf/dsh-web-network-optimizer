@@ -221,8 +221,12 @@ window.__ModuleLoader__.load({
 				// 响应体来自缓存)。Chrome 会把再验证报成 status 200、transferSize≈300(真实
 				// 线上字节),而 decodedBodySize 时而是 0 时而是缓存体大小——不可靠,只看 t。
 				// fetch/xhr 是 API 等 no-store 请求,响应再小也不是命中,必须排除。
+				// 无 Timing-Allow-Origin 的跨域资源 t=0 但真实走了网络、失败请求
+				// status=0——浏览器暴露 responseStatus 时用它们排除这两类假命中
+				// (无该字段的旧浏览器退回原启发式,不回归)。
 				const itype = String(e.initiatorType || '')
-				if (t === 0 || (t > 0 && t < 1024 && itype !== 'fetch' && itype !== 'xmlhttprequest')) { g.cached += 1; cached += 1 }
+				const hitLike = t === 0 || (t > 0 && t < 1024 && itype !== 'fetch' && itype !== 'xmlhttprequest')
+				if (hitLike && (typeof e.responseStatus !== 'number' || e.responseStatus > 0)) { g.cached += 1; cached += 1 }
 			}
 			const rows = Object.values(groups).sort((a, b) => b.transfer - a.transfer)
 			return { rows, totalTransfer, totalDecoded, cached, total: entries.length, at: Date.now() }
@@ -308,7 +312,10 @@ window.__ModuleLoader__.load({
 
 			const totals = ledger?.totals ?? { requests: 0, raw: 0, wire: 0, saved: 0 }
 			const keys = ledger?.keys ?? []
-			const today = ledger?.days?.[0] ?? null
+			// "今日"行用服务端显式 today(按服务器 dayKey(now) 取数,当日无流量为零值);
+			// 旧版账本无 today 字段时退回 days[0](最近有流量的一天)。
+			const today = ledger?.today ?? ledger?.days?.[0] ?? null
+			const todayEmpty = !today || (today.requests === 0 && today.raw === 0 && today.wire === 0)
 			const ledgerLabels = Object.create(null)
 			for (const k of keys) if (k && k.key && k.label) ledgerLabels[k.key] = k.label
 
@@ -352,7 +359,7 @@ window.__ModuleLoader__.load({
 						)),
 						el('tbody', null,
 							el('tr', null,
-								el('td', { title: '当前页面加载' }, '本次'),
+								el('td', { title: '当前页面加载(浏览器 performance API,传输字节含响应头)' }, '本次'),
 								el('td', null,
 									metric(load ? fmtBytes(load.totalTransfer) : '…',
 										load ? `节省 ${loadSavePct}%` : null,
@@ -363,15 +370,15 @@ window.__ModuleLoader__.load({
 										load ? `其中 ${load.cached} 次请求命中缓存` : '')),
 							),
 							el('tr', null,
-								el('td', { title: '今日累计的流量与请求' }, '今日'),
+								el('td', { title: '今日累计的流量与请求(服务器当日)' }, '今日'),
 								el('td', null,
-									metric(today ? fmtBytes(today.wire) : '暂无记录',
-										today ? `节省 ${todaySavePct}%` : null,
-										today ? `解压后 ${fmtBytes(today.raw)}` : '')),
+									metric(todayEmpty ? '暂无记录' : fmtBytes(today.wire),
+										todayEmpty ? null : `节省 ${todaySavePct}%`,
+										todayEmpty ? '' : `解压后 ${fmtBytes(today.raw)}`)),
 								el('td', null,
-									metric(today ? today.requests + ' 次请求' : '暂无记录',
-										today && today.requests > 0 ? `命中 ${todayHitPct}%` : null,
-										today ? `其中 ${todayHits} 次请求命中缓存` : '')),
+									metric(todayEmpty ? '暂无记录' : today.requests + ' 次请求',
+										todayEmpty || today.requests === 0 ? null : `命中 ${todayHitPct}%`,
+										todayEmpty ? '' : `其中 ${todayHits} 次请求命中缓存`)),
 							),
 							el('tr', null,
 								el('td', { title: '自账本建立(或重置)起的累计数据' }, '累计'),
