@@ -56,8 +56,8 @@ window.__ModuleLoader__.load({
 		const CSS = [
 			'.wo-root{display:flex;flex-direction:column;gap:18px;padding:4px 2px 24px;font-size:13px;color:var(--dsw-alias-label-primary)}',
 			'.wo-note{font-size:12px;color:var(--dsw-alias-label-tertiary);line-height:19px;margin:0}',
-			'.wo-dims{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}',
-			'.wo-dims-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}',
+			'.wo-dims{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow-x:auto}',
+			'.wo-dims-table{width:100%;border-collapse:collapse;font-size:12px}',
 			'.wo-dims-table th,.wo-dims-table td{text-align:center;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l1);white-space:nowrap}',
 			'.wo-dims-table th{color:var(--dsw-alias-label-tertiary);font-weight:500}',
 			'.wo-dims-table tbody tr:last-child td{border-bottom:none}',
@@ -326,7 +326,7 @@ window.__ModuleLoader__.load({
 			const cumHitPct = totals.requests > 0 ? Math.round((cumHits / totals.requests) * 100) : 0
 			// 三维度对比表(HTML table + 列头):列 = 维度/流量/请求,行 = 本次/今日/累计
 			// 指标两行:主值 + 说明(左),绿色百分比靠右;列间有可见分隔线,
-			// 维度列固定 52px(table-layout:fixed 下两个指标列等分剩余宽度)
+			// 维度列 52px;指标列 nowrap 随内容取宽,容器过窄时整表左右滑动(不压缩不截断)
 			const metric = (value, save, sub) => el('div', { className: 'wo-metric' },
 				el('div', { className: 'wo-metric-main' },
 					el('div', { className: 'wo-metric-value' }, value),
