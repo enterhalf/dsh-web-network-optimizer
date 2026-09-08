@@ -2,9 +2,19 @@
 
 **中文** | [English](./README.en.md)
 
-**dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。**
+> # ⚠️ 已废弃（DEPRECATED）——请勿在 dsh ≥ 0.1.2 上安装
+>
+> DeepSeek Harness 更新到最新版（**0.1.2-rc.1**，2026-09 起为 npm `latest`）后，官方已完整内置本插件的全部功能，本插件**不再需要、停止维护**：
+>
+> - **响应压缩** —— `@deepseek-ai/dsh-host-webserver` 内置 gzip（profile 配置 `compression: gzip`，压缩级别/阈值可调），本地与远程访问一视同仁；
+> - **浏览器缓存** —— 插件 client bundle 不再按文件 URL 下发，全部改走 `@deepseek-ai/dsh-client-modules` 的内容寻址 combo（`/plugins/??…&rev=<内容sha1>`）并下发 `Cache-Control: immutable`：URL 即内容哈希、更新必然换 rev、rev 不匹配即拒绝加载——缓存永远新鲜，不存在"缓存没跟上更新"的死角；
+> - **断线自动重连** —— 官方 ConnectionController 自带指数退避自动重连与离线感知（`navigator.onLine`），恢复后数据自动重同步。
+>
+> 本插件基于的是上述功能出现**之前**的旧版架构（逐条包装 webServer 路由表 + 按文件 URL 分发 client bundle），在新架构下既失去作用对象、又与之冲突——主实例升级到 0.1.2-rc.1 后即因安装本插件而启动异常，随后被禁用摘除。**本插件只在 dsh 0.1.x（≤ 0.1.1-rc.2）上有意义**；`package.json` 已用 `peerDependencies` 把允许的 dsh 版本限定为 `@deepseek-ai/dsh >=0.1.0-rc.2 <=0.1.1-rc.2`，包管理器会据此提示不兼容。
+>
+> 已升级到 dsh ≥ 0.1.2 的用户请卸载：`dsh plugin --profile <name> remove dsh-web-network-optimizer`。以下正文为旧版功能存档。
 
-**Network optimization for the DSH web UI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
+## 曾提供的功能（历史存档）
 
 1. **连接守护**——手机切后台后运营商静默断网导致"界面永久卡死"：自动检测、1 秒内自动恢复，连接状态以会话标题左侧的小圆点常显（绿=正常 / 灰=检查中 / 红脉冲=异常），点圆点可手动强制重连；
 2. **响应压缩**——所有可压缩响应下发 brotli、gzip 兜底，本地回环与远程访问行为一致；
@@ -12,7 +22,7 @@
 4. **分插件流量账本**——设置 → **Web 网络优化器** 面板，实时看到每个插件本次加载与累计占用多少流量、压缩省了多少、缓存命中情况；
 5. **缓存自检**——怀疑浏览器缓存没跟上更新时，面板提供 DevTools 手动清缓存的三选一指引，一键复制菜单操作。
 
-## 实测效果
+## 实测效果（旧版数据）
 
 完整加载 GUI（87 个静态请求）：首屏静态流量 8.1 MB → **1.54 MB（−81%）**，缓存命中后二次访问静态零传输；最大 API `/api/session.list` 2.18 MB → **144 KB（−93%）**。
 
@@ -35,16 +45,20 @@
 
 **点击圆点 = 手动强制重连**——任何时候怀疑它卡了，点一下就有确定的结果。
 
-## 安装
+## 安装（仅适用于 dsh ≤ 0.1.1-rc.2）
 
-```bash
-dsh plugin --profile web add dsh-web-network-optimizer@latest
-```
+> 先确认版本：`dsh --version`。**dsh ≥ 0.1.2（含 0.1.2-rc.1）不要安装本插件**——官方已内置全部功能（见文首），本插件会与新版架构冲突；兼容范围见 `package.json` 的 `peerDependencies`。
 
-卸载：
+已在新版 dsh 上装过的，先卸载：
 
 ```bash
 dsh plugin --profile web remove dsh-web-network-optimizer
+```
+
+旧版（dsh 0.1.0-rc.x / 0.1.1-rc.x）安装：
+
+```bash
+dsh plugin --profile web add dsh-web-network-optimizer@latest
 ```
 
 卸载时路由包装完整还原；账本文件保留在 `~/.dsh/storages/dsh-web-network-optimizer/` 供回看，孤儿缓存由浏览器配额自动回收。

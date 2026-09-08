@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-network-optimizer",
   "version": "0.3.2",
-  "description": "dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。",
+  "description": "dsh网页端网络优化（已废弃）：DeepSeek Harness ≥0.1.2 官方已内置 gzip 压缩、client bundle 内容寻址缓存与自动重连；本插件仅适用于 dsh ≤0.1.1-rc.2 的旧版。",
   "type": "module",
   "main": "./lib/index.js",
   "files": [
@@ -29,7 +29,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
-    "cordis": ">=4.0.0-rc <5"
+    "cordis": ">=4.0.0-rc <5",
+    "@deepseek-ai/dsh": ">=0.1.0-rc.2 <=0.1.1-rc.2"
   },
   "scripts": {
     "build": "bash scripts/build.sh",
