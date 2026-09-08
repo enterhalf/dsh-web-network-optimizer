@@ -12,9 +12,11 @@
 >
 > This plugin was built on the *old* architecture that predates those features (wrapping each webServer route table entry + per-file client-bundle delivery). On the new architecture it has nothing to wrap and actively conflicts — after this repo's main instance upgraded to 0.1.2-rc.1, installing it broke startup and it was disabled and removed. **The plugin is only meaningful on dsh 0.1.x (≤ 0.1.1-rc.2)**; `package.json` now limits the allowed dsh versions through `peerDependencies` to `@deepseek-ai/dsh >=0.1.0-rc.2 <=0.1.1-rc.2`, so package managers flag the incompatibility.
 >
-> Users already on dsh ≥ 0.1.2 should uninstall it: `dsh plugin --profile <name> remove dsh-web-network-optimizer`. The content below is kept as an archive of the legacy behavior.
+> Users already on dsh ≥ 0.1.2 should uninstall it: `dsh plugin --profile <name> remove dsh-web-network-optimizer`.
 
-## Features previously provided (legacy archive)
+**dsh网页端网络优化：通过缓存与压缩技术降低传输，从而大幅提升网页加载速度；同时提供网络断连指示与自动断网重连功能。非常适合追求极致性能或网络不稳定用户使用。**
+
+**Network optimization for the DSH web UI: reduces transfer size with caching and compression to greatly speed up page loading, plus a connection-drop indicator and automatic reconnection. Ideal for users pursuing peak performance or using unstable networks.**
 
 1. **Connection Guard** — mobile carriers silently drop the network when the phone goes to the background, leaving the UI "permanently frozen": detected automatically, recovered within 1 second, with connection status shown as a small dot beside the conversation title (green = OK / gray = checking / red pulse = problem) and a manual forced reconnect on click;
 2. **Response Compression** — every compressible response is served as brotli with gzip as fallback, identical behavior on local loopback and remote access;
@@ -22,7 +24,7 @@
 4. **Per-Plugin Traffic Ledger** — the Settings → **Web Network Optimizer** panel shows, in real time, how much traffic each plugin uses per load and in total, how much compression saved, and cache-hit status;
 5. **Cache Self-Check** — when you suspect the browser cache has not caught up with an update, the panel offers three one-click-copyable DevTools steps for clearing the browser cache manually.
 
-## Measured Results (legacy data)
+## Measured Results
 
 Full GUI load (87 static requests): first-load static traffic 8.1 MB → **1.54 MB (−81%)**, zero static transfer on a cache-hit second visit; largest API `/api/session.list` 2.18 MB → **144 KB (−93%)**.
 
@@ -45,20 +47,16 @@ A small dot is always shown to the **left of the conversation title** — color 
 
 **Clicking the dot = manual forced reconnect** — whenever you suspect it is stuck, one click gives a definite result.
 
-## Installation (only for dsh ≤ 0.1.1-rc.2)
-
-> Check first: `dsh --version`. **On dsh ≥ 0.1.2 (including 0.1.2-rc.1) do not install this plugin** — the official build covers everything (see the notice at the top), and the plugin conflicts with the new architecture; the allowed range is declared in `peerDependencies` in `package.json`.
-
-If you already installed it on a new dsh, uninstall first:
-
-```bash
-dsh plugin --profile web remove dsh-web-network-optimizer
-```
-
-On legacy dsh (0.1.0-rc.x / 0.1.1-rc.x):
+## Installation
 
 ```bash
 dsh plugin --profile web add dsh-web-network-optimizer@latest
+```
+
+Uninstall:
+
+```bash
+dsh plugin --profile web remove dsh-web-network-optimizer
 ```
 
 Uninstalling restores the route wrapping completely; the ledger file is kept in `~/.dsh/storages/dsh-web-network-optimizer/` for review, and orphaned cache is reclaimed by the browser's own quota.
